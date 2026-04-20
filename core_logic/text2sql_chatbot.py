@@ -626,8 +626,8 @@ class Text2SQLChatbot:
                     alias_map[alias] = table      # alias → real table
 
         # 2. Strip JOIN...ON clauses so ON-columns don't count as "used"
-        _join_pattern = r'\s+(?:INNER|LEFT|RIGHT|FULL|CROSS)?\s*JOIN\s+\w+(?:\s+\w+)?\s+ON\s+[^\n;]+'
-        sql_without_joins = re.sub(_join_pattern, '', sql, flags=re.IGNORECASE)
+        _join_pattern = r'\s+(?:INNER|LEFT|RIGHT|FULL|CROSS)?\s*JOIN\s+\w+(?:\s+\w+)?\s+ON\s+.+?(?=\s+(?:WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|UNION|INNER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|FULL\s+JOIN|CROSS\s+JOIN|JOIN)\b|\s*;|\s*$)'
+        sql_without_joins = re.sub(_join_pattern, '', sql, flags=re.IGNORECASE | re.DOTALL)
 
         # 3. Find alias.column refs and resolve to real tables
         col_refs = re.findall(r'\b([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b', sql_without_joins)
@@ -640,7 +640,7 @@ class Text2SQLChatbot:
         # 4. If only one real table is referenced, strip the JOIN
         if len(tables_used_in_cols) == 1:
             keep_table = list(tables_used_in_cols)[0]
-            cleaned = re.sub(_join_pattern, '', sql, flags=re.IGNORECASE)
+            cleaned = re.sub(_join_pattern, '', sql, flags=re.IGNORECASE | re.DOTALL)
 
             # Find the alias used for the kept table so we can strip it
             keep_alias = None

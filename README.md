@@ -85,46 +85,53 @@ The result is a system that achieves comparable personalisation quality to cloud
 A walkthrough of the UI and the key interactions a user has with the system.
 
 ---
-### Step 1 — Login, Connect, and Load Schema
+### Step 1 — Login and Isolated Memory Spaces
 
 ![Login](docs/images/Login.png)
-*(Full app overview — login panel, connection test showing DATABASE ✅ LLM ✅ MEMORY ✅, schema loaded, and first preference + terminology already saved to the Memory Bank)*
+*(Login panel — username "Aunkit" entered, optional database connection field, Login / Logout / Test Connections buttons visible under the Smart Query Assistant header)*
 
-The entry point to the system. A user enters their username — each username gets a completely isolated memory space. The system immediately tests all three connections (database, LLM, memory store) and reports their status. Once the schema is loaded, the system introspects the target PostgreSQL database and builds the table/column/FK map that grounds all future SQL generation. The Memory Bank on the right begins populating as soon as the first preferences are stated.
+The entry point to the system. A user enters their username — each username gets a completely isolated memory space, so one user's preferences never leak into another's queries. The optional Database Connection field lets users point the system at any PostgreSQL instance; if left blank, the connection from `.env` is used. The **Test Connections** button validates the database, LLM (Ollama), and memory store in one click so setup issues surface immediately.
 
 ---
 
-### Step 2 — Teaching the System Your Preferences
+### Step 2 — Teaching the System a Preference
 
-![Preferences](docs/images/Preferences.png)
-*(Preference capture flow — user says "I am only interested in approved loans", system confirms and saves; user defines "high-value loans as loans over $500K", system saves terminology. SQL panel shows "Preference stored — no SQL executed.")*
+![Preference](docs/images/Preference.png)
+*(Preference capture — user says "Always show me customers from India", system confirms and saves. Memory Bank on the right shows the new preference `country = 'India'` under PREFERENCES. SQL panel at the bottom shows "Preference stored — no SQL executed".)*
 
-This is the memory system's core UX moment. When the user states a preference or defines a term, the system:
+This is the memory system's core UX moment. When the user states a preference, the system:
 - Detects it as a preference statement (not a data query) via the regex classifier
 - Extracts the structured fact using the LLM extraction prompt
-- Stores it to the Memory Bank with the appropriate category tag (`[PREFERENCE]` or `[TERM]`)
-- Confirms visually in chat with ✨ *Preference saved to memory*
-- Shows `-- Preference stored — no SQL executed` in the SQL panel so it's clear no query was run
+- Stores it to the Memory Bank tagged `[PREFERENCE]`
+- Confirms in chat with ✨ *Preference saved to memory*
+- Shows `-- Preference stored — no SQL executed` in the SQL panel so it's clear no query ran
 
-The Memory Bank on the right updates in real time — here showing `WHERE status = 'approved'` under PREFERENCES and `high-value loans: loans over $500K` under TERMINOLOGY.
+The Memory Bank on the right updates in real time — here showing `country = 'India'` under PREFERENCES.
 
 ---
 
-### Step 3 — Querying with Automatic Preference Application
+### Step 3 — Defining Custom Terminology
+
+![Terminology](docs/images/Terminology.png)
+*(Terminology capture — user says "High value order means total amount over 10000", system confirms and saves under TERMINOLOGY. Memory Bank shows `High value order means total amount over 10000` in the green TERMINOLOGY section.)*
+
+Beyond preferences, users can teach the system their **own vocabulary**. Phrases like `X means Y` or `Define X as Y` are extracted as `[TERM]` memories and stored separately from preferences. Terminology is looked up semantically at query time, so when a user later asks *"Show me high-value orders"*, the system knows exactly which column and threshold to use — no need to re-specify the definition every session.
+
+The Memory Bank visually separates PREFERENCES (red border, filters) from TERMINOLOGY (green border, definitions) so the user can see at a glance what the system has learned about them.
+
+---
+
+
+### Step 4 — Querying with Preferences and Terminology Applied
 
 ![Example Query](docs/images/Example.png)
-*(Query "Show me some loans info" — results table shows 7 approved loans with full columns. Generated SQL automatically includes `WHERE application_status = 'approved'` and `loan_amount > 500000` from stored memories.)*
+*(Query "Show me customers who have a high order value" — results table shows 5 rows of wholesale customers from India (Rohan Kapoor, Ananya Reddy, …). Generated SQL panel shows a JOIN across `customers` and `orders` with `WHERE c.country = 'India' AND o.total_amount > 10000`. Execution time 0.030s.)*
 
-Now when the user asks a natural language question, the system retrieves relevant memories via semantic search and injects them into the SQL prompt. The generated SQL — visible in the syntax-highlighted panel — automatically includes the user's stored filters without them having to repeat themselves. The results table renders directly in the chat.
+This is where the stored memories pay off. The user asks a natural-language question that mentions neither "India" nor "10000", yet the generated SQL automatically includes both:
+- `WHERE c.country = 'India'` — applied from the stored `[PREFERENCE]`
+- `AND o.total_amount > 10000` — resolved from the stored `[TERM]` definition of "high value order"
 
----
-
-### Step 4 — Aggregate Queries with Preferences Still Applied
-
-![Aggregate Query](docs/images/Aggregate.png)
-*(Query "How many loans do we have for each state?" — results table shows loan counts by state. Generated SQL includes `WHERE application_status = 'approved'` automatically from the preference memory, plus `GROUP BY applicant_state`. Execution time 0.043s shown.)*
-
-Even aggregate queries like counts and groupings benefit from stored preferences. The user asks a simple grouping question — the system applies the remembered `approved` filter automatically, produces correct SQL with `GROUP BY`, and returns the results as a clean table. The Memory Bank remains visible on the right, showing the two memories that were applied. Execution time is displayed in the SQL panel footer.
+The system also correctly **preserves the JOIN** between `customers` and `orders` because the WHERE clause references columns from both tables. The unnecessary-JOIN stripper is smart enough to keep the JOIN when it's actually load-bearing, and drop it when it isn't. The results render directly in chat, and the syntax-highlighted SQL is displayed alongside for full transparency and debuggability.
 
 ---
 
@@ -242,7 +249,7 @@ Three tables enforce strict user isolation — every row is scoped to a `user_id
 CREATE TABLE memories (
     id          SERIAL PRIMARY KEY,
     user_id     TEXT NOT NULL,          -- isolation boundary
-    content     TEXT NOT NULL,          -- "[PREFERENCE] only approved loans"
+    content     TEXT NOT NULL,          -- "[PREFERENCE] only delivered orders"
     created_at  FLOAT NOT NULL,
     source      TEXT,                   -- "conversation" | "initialization"
     metadata    JSONB DEFAULT '{}',     -- {"type": "preference"}
@@ -279,7 +286,7 @@ The memory architecture is directly inspired by the [Mem0 research paper](https:
 
 ### Why Traditional Text2SQL Systems Fail at Memory
 
-Most Text-to-SQL tools treat every session as a blank slate. Users are forced to re-specify their preferences ("only show approved loans"), re-define their terminology ("high-value means over $500K"), and re-establish context at the start of every conversation. This is the **cognitive load problem** — the AI assistant should be learning, but isn't.
+Most Text-to-SQL tools treat every session as a blank slate. Users are forced to re-specify their preferences ("only show delivered orders"), re-define their terminology ("big spenders means total spend over 50000"), and re-establish context at the start of every conversation. This is the **cognitive load problem** — the AI assistant should be learning, but isn't.
 
 ### The Two-Phase Mem0 Architecture
 
@@ -291,16 +298,16 @@ The extraction prompt instructs the model to tag facts into four categories:
 
 ```
 [PREFERENCE]  An explicit filter the user wants applied to all future queries
-              e.g. "[PREFERENCE] User only wants to see approved loan applications"
+              e.g. "[PREFERENCE] User only wants to see delivered orders"
 
 [TERM]        A custom term and its precise database mapping
-              e.g. "[TERM] 'luxury properties' means properties with appraised_value > 300000"
+              e.g. "[TERM] 'big spenders' means customers with total order value over 50000"
 
 [METRIC]      A user-defined calculation or KPI
-              e.g. "[METRIC] 'default rate' = COUNT(status='defaulted') / COUNT(*)"
+              e.g. "[METRIC] 'average order value' = SUM(total_amount) / COUNT(*)"
 
 [ENTITY]      Frequently accessed tables, columns, or relationships
-              e.g. "[ENTITY] User frequently queries the loan_applications table"
+              e.g. "[ENTITY] User frequently queries the orders and customers tables"
 ```
 
 If there is nothing meaningful to extract, the model outputs exactly `NONE` — a hard gate that prevents noise from accumulating in the memory store.
@@ -349,13 +356,13 @@ Only memories that are actually relevant to the current question surface — not
 ### Memory Categories in Practice
 
 ```
-User: "I am only interested in approved loans"
-→ Stored: [PREFERENCE] User only wants to see approved loan applications
+User: "I only want to see delivered orders"
+→ Stored: [PREFERENCE] User only wants to see delivered orders
 
-User: "High-value loans means loans over $500K"
-→ Stored: [TERM] high-value loans = loan_amount > 500000
+User: "Big spenders means customers with total spend over 50000"
+→ Stored: [TERM] big spenders = customers with total order value over 50000
 
-User: "Show me the default rate for Q3"
+User: "Show me top big spenders"
 → [PREFERENCE] and [TERM] memories retrieved via semantic search
 → SQL generated with filters and terminology pre-applied
 → Response includes "(Note: preferences applied)"
@@ -382,20 +389,21 @@ Raw SQL only.
 **User message** — injects schema + memory context + question:
 ```
 Schema (use ONLY these tables and columns):
-TABLE loan_applications (loan_id, applicant_name, loan_amount, application_status, ...)
-TABLE properties (property_id, address, city, state, appraised_value, ...)
-  -- application_status: 'approved', 'rejected', 'pending'
-JOIN: loan_applications.property_id = properties.property_id
+TABLE customers (customer_id, name, email, city, country, segment, registered_at)
+TABLE orders (order_id, customer_id, status, order_date, total_amount, payment_method)
+  -- status: 'pending', 'shipped', 'delivered', 'cancelled'
+  -- segment: 'retail', 'wholesale'
+JOIN: orders.customer_id = customers.customer_id
 
 Rules:
 - Output raw SQL only, nothing else.
 - Do NOT JOIN tables unless both are genuinely needed in SELECT or WHERE.
 - Add LIMIT 20 for non-aggregate queries.
 - User preferences:
-  - Apply filter: [PREFERENCE] only show approved applications
-  - Term defined: [TERM] high-value = loan_amount > 500000
+  - Apply filter: [PREFERENCE] only show delivered orders
+  - Term defined: [TERM] big spenders = customers with total order value over 50000
 
-Question: Show me all high-value loans
+Question: Show me all big spenders
 ```
 
 #### Why the Schema Block is Compact
@@ -601,23 +609,22 @@ All models are called via Ollama's `/api/chat` endpoint, which works with any in
 ### Example Session
 
 ```
-User: "I am only interested in approved loans"
+User: "I only want to see delivered orders"
 → ✅ Preference saved to memory
 
-User: "Show me all high-value loans"
-→ SELECT loan_id, applicant_name, loan_amount, ...
-  FROM loan_applications
-  WHERE application_status = 'approved'    ← auto-applied preference
-  AND loan_amount > 500000
+User: "Show me all orders"
+→ SELECT order_id, customer_id, status, order_date, total_amount, payment_method
+  FROM orders
+  WHERE status = 'delivered'               ← auto-applied preference
   LIMIT 20;
 
-User: "Define high-value loans as loans over $500K"
+User: "Define big spenders as customers with total spend over 50000"
 → ✅ Terminology saved to memory
 
-User: "List luxury properties in California"
-→ SELECT property_id, property_address, city, appraised_value, ...
-  FROM properties                          ← no unnecessary JOIN
-  WHERE is_luxury_property = true AND state = 'CA'
+User: "Show me customers from India"
+→ SELECT customer_id, name, email, city, country, segment
+  FROM customers                           ← no unnecessary JOIN
+  WHERE country = 'India'
   LIMIT 20;
 ```
 
@@ -639,7 +646,7 @@ chatbot.set_user("analyst_1")
 success, msg = chatbot.initialize_database("public")
 
 # Process a query
-result = chatbot.process_message("Show me all approved loans")
+result = chatbot.process_message("Show me all delivered orders")
 
 print(result['sql_query'])       # Generated SQL
 print(result['results'])         # Query results
@@ -835,7 +842,7 @@ This would make it trivial to compare how different models perform on the same s
 
 - **Connection pooling**: Replace per-operation `psycopg2.connect()` calls with `SimpleConnectionPool` for better throughput under concurrent users
 - **Memory quality gating**: Add a confidence threshold to memory extraction — only store memories from queries that returned non-empty results, reducing noise from failed or ambiguous queries
-- **Cross-session memory summarisation**: Periodically compress old memories into higher-level summaries (e.g. "User consistently works with loan performance data") to keep the memory store lean over many sessions
+- **Cross-session memory summarisation**: Periodically compress old memories into higher-level summaries (e.g. "User consistently works with order analytics") to keep the memory store lean over many sessions
 - **Schema change detection**: Detect when a table or column referenced in a stored memory no longer exists in the current schema, and flag or remove stale memories automatically
 - **Additional data connectors**: Pluggable client implementations for Snowflake, Databricks, MySQL, and SQL Server — the `PostgresDataClient` interface is already designed to be swapped out without touching the memory layer
 

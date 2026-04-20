@@ -615,36 +615,32 @@ def schema_docs_html() -> str:
     return """
 <div style="padding:0.5rem 0">
   <p style="margin-bottom:1rem;opacity:0.75;font-size:0.87rem;">
-    Connects to a <strong>loan &amp; property database</strong>.
+    Connects to an <strong>ecommerce customers &amp; orders database</strong>.
   </p>
 
   <div class="schema-table">
-    <div class="schema-table-header">📋 loan_applications — Loan records with approval status &amp; risk</div>
-    <div class="schema-row"><span class="schema-col">loan_id</span><span class="schema-type">SERIAL PK</span></div>
-    <div class="schema-row"><span class="schema-col">applicant_name</span><span class="schema-type">VARCHAR — borrower</span></div>
-    <div class="schema-row"><span class="schema-col">loan_amount</span><span class="schema-type">DECIMAL — loan value</span></div>
-    <div class="schema-row"><span class="schema-col">interest_rate</span><span class="schema-type">DECIMAL — rate %</span></div>
-    <div class="schema-row"><span class="schema-col">credit_score</span><span class="schema-type">INT — FICO 300–850</span></div>
-    <div class="schema-row"><span class="schema-col">application_status</span><span class="schema-type">pending / approved / rejected</span></div>
-    <div class="schema-row"><span class="schema-col">risk_category</span><span class="schema-type">low / moderate / high / very_high</span></div>
-    <div class="schema-row"><span class="schema-col">applicant_state</span><span class="schema-type">VARCHAR(2) — state code</span></div>
-    <div class="schema-row"><span class="schema-col">loan_purpose</span><span class="schema-type">home_purchase / refinance / …</span></div>
-    <div class="schema-row"><span class="schema-col">loan_type</span><span class="schema-type">conventional / fha / va / jumbo</span></div>
+    <div class="schema-table-header">👤 customers — Ecommerce customer records</div>
+    <div class="schema-row"><span class="schema-col">customer_id</span><span class="schema-type">SERIAL PK</span></div>
+    <div class="schema-row"><span class="schema-col">name</span><span class="schema-type">VARCHAR — customer name</span></div>
+    <div class="schema-row"><span class="schema-col">email</span><span class="schema-type">VARCHAR — unique email</span></div>
+    <div class="schema-row"><span class="schema-col">city</span><span class="schema-type">VARCHAR — city</span></div>
+    <div class="schema-row"><span class="schema-col">country</span><span class="schema-type">VARCHAR — country</span></div>
+    <div class="schema-row"><span class="schema-col">segment</span><span class="schema-type">retail / wholesale</span></div>
+    <div class="schema-row"><span class="schema-col">registered_at</span><span class="schema-type">TIMESTAMP — signup date</span></div>
   </div>
 
   <div class="schema-table">
-    <div class="schema-table-header">🏠 properties — Property details linked to loans</div>
-    <div class="schema-row"><span class="schema-col">property_id</span><span class="schema-type">SERIAL PK</span></div>
-    <div class="schema-row"><span class="schema-col">loan_id</span><span class="schema-type">INT FK → loan_applications</span></div>
-    <div class="schema-row"><span class="schema-col">property_address, city, state</span><span class="schema-type">location</span></div>
-    <div class="schema-row"><span class="schema-col">appraised_value</span><span class="schema-type">DECIMAL — property value</span></div>
-    <div class="schema-row"><span class="schema-col">property_type</span><span class="schema-type">single_family / condo / …</span></div>
-    <div class="schema-row"><span class="schema-col">is_luxury_property</span><span class="schema-type">BOOLEAN</span></div>
-    <div class="schema-row"><span class="schema-col">bedrooms, bathrooms, sq_ft</span><span class="schema-type">property specs</span></div>
+    <div class="schema-table-header">🛒 orders — Orders linked to customers</div>
+    <div class="schema-row"><span class="schema-col">order_id</span><span class="schema-type">SERIAL PK</span></div>
+    <div class="schema-row"><span class="schema-col">customer_id</span><span class="schema-type">INT FK → customers</span></div>
+    <div class="schema-row"><span class="schema-col">status</span><span class="schema-type">pending / shipped / delivered / cancelled</span></div>
+    <div class="schema-row"><span class="schema-col">order_date</span><span class="schema-type">TIMESTAMP — when placed</span></div>
+    <div class="schema-row"><span class="schema-col">total_amount</span><span class="schema-type">DECIMAL — order total</span></div>
+    <div class="schema-row"><span class="schema-col">payment_method</span><span class="schema-type">credit_card / upi / netbanking / cod</span></div>
   </div>
 
   <p style="font-size:0.82rem;opacity:0.6;">
-    <strong>Key FK:</strong> <code>properties.loan_id → loan_applications.loan_id</code>
+    <strong>Key FK:</strong> <code>orders.customer_id → customers.customer_id</code>
   </p>
 </div>
 """
@@ -747,10 +743,10 @@ def build_interface():
                 gr.HTML("""
                 <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;padding:0.15rem 0;">
                     <span style="font-size:0.74rem;color:#6b7280;flex-shrink:0;">Try:</span>
-                    <span class="ex-chip" onclick="window._fillMsg('Show me all approved loans')">Show approved loans</span>
-                    <span class="ex-chip" onclick="window._fillMsg('I am only interested in approved loans')">Set: only approved</span>
-                    <span class="ex-chip" onclick="window._fillMsg('List luxury properties in California')">Luxury props in CA</span>
-                    <span class="ex-chip" onclick="window._fillMsg('Define high-value loans as loans over $500K')">Define high-value loans</span>
+                    <span class="ex-chip" onclick="window._fillMsg('Show me all delivered orders')">Show delivered orders</span>
+                    <span class="ex-chip" onclick="window._fillMsg('I only want to see delivered orders')">Set: only delivered</span>
+                    <span class="ex-chip" onclick="window._fillMsg('Show orders over 10000')">Orders over 10000</span>
+                    <span class="ex-chip" onclick="window._fillMsg('Define big spenders as customers with total spend over 50000')">Define big spenders</span>
                 </div>
                 """)
 
@@ -770,20 +766,20 @@ def build_interface():
                 gr.HTML("""
                 <div style="padding:0.5rem 0;font-size:0.88rem;">
                     <p style="font-weight:700;margin-bottom:0.5rem;">🎯 Setting Preferences</p>
-                    <span class="ex-chip">"I am only interested in approved loans"</span>
-                    <span class="ex-chip">"Always show me data from California"</span>
-                    <span class="ex-chip">"Exclude high-risk applications"</span>
+                    <span class="ex-chip">"Only show delivered orders"</span>
+                    <span class="ex-chip">"Exclude cancelled orders"</span>
+                    <span class="ex-chip">"Always show me customers from India"</span>
 
                     <p style="font-weight:700;margin:1rem 0 0.5rem;">📖 Defining Terminology</p>
-                    <span class="ex-chip">"Define high-value loans as loans over $500K"</span>
-                    <span class="ex-chip">"High-risk means credit score below 650"</span>
-                    <span class="ex-chip">"West Coast means CA, OR, and WA"</span>
+                    <span class="ex-chip">"Big spenders means total spend over 50000"</span>
+                    <span class="ex-chip">"Recent means last 30 days"</span>
+                    <span class="ex-chip">"High-value orders means total_amount over 10000"</span>
 
                     <p style="font-weight:700;margin:1rem 0 0.5rem;">🔍 Natural Queries</p>
-                    <span class="ex-chip">"Show me high-value approved loans"</span>
-                    <span class="ex-chip">"Average interest rate by risk category"</span>
-                    <span class="ex-chip">"Count loans by state"</span>
-                    <span class="ex-chip">"Properties over $1M with loan details"</span>
+                    <span class="ex-chip">"Show me top customers by order value"</span>
+                    <span class="ex-chip">"Orders by payment method"</span>
+                    <span class="ex-chip">"Count orders by status"</span>
+                    <span class="ex-chip">"Customers with no orders"</span>
                 </div>
                 """)
 
@@ -863,5 +859,5 @@ if __name__ == "__main__":
     print("-" * 60)
 
     app = build_interface()
-    app.launch(server_name="0.0.0.0", server_port=7860,
+    app.launch(server_name="127.0.0.1", server_port=7860,
                share=False, show_error=True, quiet=False)

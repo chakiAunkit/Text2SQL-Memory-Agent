@@ -117,34 +117,34 @@ def test_database_connection():
 
         # Test if our tables exist
         table_check = client.execute_query("""
-            SELECT table_name FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name IN ('loan_applications', 'properties')
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name IN ('customers', 'orders')
             ORDER BY table_name;
         """)
 
         if table_check['success']:
             tables = [row['table_name'] for row in table_check['data']]
-            if 'loan_applications' in tables and 'properties' in tables:
-                print("✅ Required tables (loan_applications, properties) found")
+            if 'customers' in tables and 'orders' in tables:
+                print("✅ Required tables (customers, orders) found")
 
                 # Check data counts
-                loan_count = client.execute_query("SELECT COUNT(*) as count FROM loan_applications")
-                prop_count = client.execute_query("SELECT COUNT(*) as count FROM properties")
+                customer_count = client.execute_query("SELECT COUNT(*) as count FROM customers")
+                order_count = client.execute_query("SELECT COUNT(*) as count FROM orders")
 
-                if loan_count['success'] and prop_count['success']:
-                    loans = loan_count['data'][0]['count']
-                    props = prop_count['data'][0]['count']
-                    print(f"✅ Data found: {loans} loans, {props} properties")
+                if customer_count['success'] and order_count['success']:
+                    customers = customer_count['data'][0]['count']
+                    orders = order_count['data'][0]['count']
+                    print(f"✅ Data found: {customers} customers, {orders} orders")
 
-                    if loans == 0 or props == 0:
+                    if customers == 0 or orders == 0:
                         print("⚠️  Warning: Tables exist but no data found")
-                        print("   Run: psql -h localhost -U postgres -d testdb -f enhanced_test_database_setup.sql")
+                        print("   Run: psql -h localhost -U postgres -d testdb -f test_db_setup.sql")
                 else:
                     print("⚠️  Warning: Could not count table records")
             else:
                 print("❌ Required tables not found. Available tables:", tables)
-                print("   Run: psql -h localhost -U postgres -d testdb -f enhanced_test_database_setup.sql")
+                print("   Run: psql -h localhost -U postgres -d testdb -f test_db_setup.sql")
                 return False
         else:
             print("⚠️  Warning: Could not check for tables")
@@ -242,13 +242,13 @@ def test_preference_detection():
         chatbot.set_user("test_user")
 
         test_cases = [
-            ("I am only interested in approved loans", True),
-            ("I am not interested in luxury properties", True),
-            ("Show me approved loans", False),
-            ("What are some cheap properties?", False),
-            ("From now on, only show me California data", True),
-            ("Define high-value as over $500K", True),
-            ("How many loans do we have?", False),
+            ("I am only interested in delivered orders", True),
+            ("I am not interested in cancelled orders", True),
+            ("Show me delivered orders", False),
+            ("What are some recent orders?", False),
+            ("From now on, only show me India data", True),
+            ("Define big spenders as customers with total spend over 50000", True),
+            ("How many orders do we have?", False),
         ]
 
         print("\n📋 Test Results:")
@@ -289,7 +289,7 @@ def test_memory_operations():
             initial_count = 0
         print(f"Initial memories: {initial_count}")
 
-        pref_result = chatbot._handle_preference_statement("I only want to see approved loans")
+        pref_result = chatbot._handle_preference_statement("I only want to see delivered orders")
         print(f"Preference handling result: {pref_result.get('success', False) if isinstance(pref_result, dict) else pref_result}")
 
         updated_memories = chatbot.get_user_memories()
@@ -342,9 +342,9 @@ def test_enhanced_processing():
         chatbot.set_user("test_processing_user")
 
         test_messages = [
-            "I am not interested in luxury properties",
-            "Show me some cheap properties",
-            "Define affordable as under $400K",
+            "I am not interested in cancelled orders",
+            "Show me recent orders",
+            "Define small orders as orders under 1000",
         ]
 
         for message in test_messages:
@@ -379,10 +379,10 @@ def test_simple_sql_generation():
         chatbot.set_user("test_sql_user")
 
         test_queries = [
-            "show me approved loans",
-            "what are some cheap properties",
-            "show me luxury properties in california",
-            "count all loans",
+            "show me delivered orders",
+            "what are some recent orders",
+            "show me customers in india",
+            "count all orders",
         ]
 
         for query in test_queries:
